@@ -1,29 +1,36 @@
 const jwt = require("jsonwebtoken");
+const createErrors = require("http-errors");
 
-const secret = "swayamproject";
+const secret = process.env.ACCESS_TOKEN_SECRET;
 
 const auth = async (req, res, next) => {
   try {
-    const token = req.headers.authorization.split(" ")[1];
+    // if(!req.headers.authorization) return 
+
+    const Accesstoken = req.headers.authorization.split(" ")[1];
     const isCustomAuth = token.length < 500;  // if length is less than 500 then token is custom
 
     let decodedData;
 
     if (token && isCustomAuth) {      // if the token is custom token
-      decodedData = jwt.verify(token, secret);
-
-      if(decodedData) {
-        req.userId = decodedData.id;
-      }
+      jwt.verify(Accesstoken, secret, (err, payload) => {
+        if(err) {
+          const errormsg = (err.name === "JsonWebTokenError") ? "Unauthorized User" : err.message;
+          next(createErrors.Unauthorized(errormsg))  // if token would have expired
+        }
+        req.userId = payload.id;
+        next();
+      })
     } else {                          // if the token is oauth token
-      decodedData = jwt.decode(token);
-
-      if(decodedData){
-        req.userId = decodedData.sub; // sub is a value provided by google which uniquely identifies a user
-      }  
-    }    
-
-    next();
+      jwt.decode(Accesstoken, (err, payload) => {
+        if(err) {
+          const errormsg = (err.name === "JsonWebTokenError") ? "Unauthorized User" : err.message;
+          next(createErrors.Unauthorized(errormsg));
+        }
+        req.userId = payload.sub;
+        next();
+      })
+    }
   } catch (error) {
     console.log(error);
   }
